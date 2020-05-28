@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# bin/compile <build-dir> <cache-dir> <env-dir>
+
+# Fail fast and fail hard.
+set -euo pipefail
+IFS=$'\n\t'
+
+BUILD_DIR=${1:-}
+CACHE_DIR=${2:-}
+ENV_DIR=${3:-}
+
+BIN_DIR=$BUILD_DIR/.deno/bin
+mkdir -p "$BIN_DIR"
+
+function topic() {
+  echo "-----> $*..."
+}
+
+function lastversion() {
+    base_url=${1:-}
+    basename $(curl -fs -o/dev/null -w %{redirect_url} $base_url/releases/latest)
+}
+
+topic "Looking up Deno version"
+INSTALL_VERSION_OPTION="$(lastversion 'https://github.com/denoland/deno')"
+if [ -f "$ENV_DIR/DENO_VERSION" ]; then
+  INSTALL_VERSION_OPTION="$(cat $ENV_DIR/DENO_VERSION)"
+  echo "       Config Var [DENO_VERSION] found."
+  echo "       Will use Deno $INSTALL_VERSION_OPTION"
+else
+  echo "       Will use Deno $INSTALL_VERSION_OPTION (latest)"
+fi
+
+topic "Downloading Deno binary ($INSTALL_VERSION_OPTION)"
+export DENO_INSTALL="$BUILD_DIR/.deno"
+curl --retry 3 -fsSL 'https://deno.land/x/install/install.sh' | sh -s "$INSTALL_VERSION_OPTION" >/dev/null 2>&1
+echo "       Downloaded"
+
+topic "Creating Deno export script"
+mkdir -p $BUILD_DIR/.profile.d
+echo "export PATH=\$PATH:\$HOME/.deno/bin" >> $BUILD_DIR/.profile.d/deno.sh
+echo "       Created"
